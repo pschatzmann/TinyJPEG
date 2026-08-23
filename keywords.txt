@@ -1,0 +1,36 @@
+#######################################
+# Syntax Coloring Map For TinyJPEG
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+TinyJPEGDecoder	KEYWORD1
+JDEC	KEYWORD1
+JRESULT	KEYWORD1
+JRECT	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+drawJpg	KEYWORD2
+getJpgSize	KEYWORD2
+setJpgScale	KEYWORD2
+setSwapBytes	KEYWORD2
+setCallback	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
+JDR_OK	LITERAL1
+JDR_INTR	LITERAL1
+JDR_INP	LITERAL1
+JDR_MEM1	LITERAL1
+JDR_MEM2	LITERAL1
+JDR_PAR	LITERAL1
+JDR_FMT1	LITERAL1
+JDR_FMT2	LITERAL1
+JDR_FMT3	LITERAL1

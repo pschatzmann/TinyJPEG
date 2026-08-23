@@ -1,0 +1,12 @@
+version: "0.1.0"
+description: A header-only baseline JPEG decoder for microcontrollers, ported from Bodmer's TJpg_Decoder/ChaN's TJpgDec.
+url: https://github.com/pschatzmann/TinyJPEG
+repository: https://github.com/pschatzmann/TinyJPEG.git
+issues: https://github.com/pschatzmann/TinyJPEG/issues
+license: BSD-2-Clause-FreeBSD
+tags:
+  - jpeg
+  - image
+  - decoder
+  - codec
+  - display
