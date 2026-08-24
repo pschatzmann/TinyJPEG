@@ -70,7 +70,7 @@ performance sections.
 TinyJPEG is also used as a video frame decoder as part of the video
 playback functionality provided by
 [AudioTools](https://github.com/pschatzmann/arduino-audio-tools) - the
-same author's broader library for audio (and video) I/O on Arduino/ESP32.
+same author's broader library for audio (and video) I/O on Arduino.
 If you're already using AudioTools for video playback, this is the
 decoder behind the JPEG/MJPEG frames it plays; used standalone (as
 everything above describes), it needs nothing from AudioTools at all.
