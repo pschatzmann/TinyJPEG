@@ -5,25 +5,56 @@
 [![IDF Component](https://img.shields.io/badge/IDF-Component-blue.svg)](https://github.com/pschatzmann/TinyJPEG)
 [![License: FreeBSD](https://img.shields.io/badge/License-FreeBSD-green.svg)](https://www.freebsd.org/copyright/freebsd-license/)
 
-A header-only C++ port of [Bodmer's
-TJpg_Decoder](https://github.com/Bodmer/TJpg_Decoder) - a baseline
-(non-progressive) JPEG decoder built on [ChaN's
-TJpgDec](http://elm-chan.org/fsw/tjpgd/00index.html), for microcontrollers
-such as the ESP32 with no external library dependencies. Decodes straight
-into caller-supplied storage one MCU block at a time via a callback
-(typically pushed straight to a TFT display), rather than requiring memory
-for a whole decoded frame at once - so decode workspace is a small, fixed
-~3.5KB regardless of image size.
+A header-only C++ baseline (non-progressive) JPEG **decoder and encoder**
+for microcontrollers such as the ESP32, with no external library
+dependencies. Both directions are header-only C++17, allocate no heap
+memory (each uses one fixed-size workspace member array), and work
+identically from an Arduino sketch, a plain CMake project, or an ESP-IDF
+component:
 
-This is a **conversion**, not a rewrite: the actual decompressor
-(bitstream/Huffman/IDCT/YCbCr code) is ChaN's proven TJpgDec engine,
-merged from its original two-file split into one header-only file with no
-algorithmic changes. What changed is everything *around* it - see
-[Architecture](docs/architecture.md) for the full rationale and an
-API-mapping table if you're migrating an existing TJpg_Decoder sketch:
+- **`TinyJPEGDecoder`** (`src/TinyJPEGDecoder.h`) decodes straight into
+  caller-supplied storage one MCU block at a time via a callback
+  (typically pushed straight to a TFT display), rather than requiring
+  memory for a whole decoded frame at once. It's a **port**, not a
+  rewrite: the actual decompressor (bitstream/Huffman/IDCT/YCbCr code) is
+  [ChaN's proven TJpgDec](http://elm-chan.org/fsw/tjpgd/00index.html)
+  engine, merged from its original two-file split into one header with no
+  algorithmic changes, wrapped in an API in the spirit of [Bodmer's
+  TJpg_Decoder](https://github.com/Bodmer/TJpg_Decoder).
+- **`TinyJPEGEncoder`** (`src/TinyJPEGEncoder.h`) encodes one full
+  RGB888/grayscale frame (a camera buffer, a display back buffer -
+  whatever's already in RAM) to a baseline JPEG, streaming the compressed
+  output to a fixed array, a file-like object, or a callback. It's a
+  **clean-room implementation** written directly from the JPEG spec
+  (ITU-T T.81) - there's no equivalent existing small-footprint encoder
+  this project is porting from, the way `TinyJPEGDecoder` ports TJpgDec.
 
-- **Header-only.** No `.cpp` to compile or add to a build - `#include
-  <TinyJPEGDecoder.h>` and go.
+Both share `src/jpeg_common.h` (the zigzag table and byte-clamp function
+that are direction-agnostic) but are otherwise independent - use either
+one without the other, and neither drags in Arduino-specific code (SD,
+SPIFFS, displays, ...) at the core level.
+
+See [Architecture](docs/architecture.md) for the full design rationale
+behind both directions, including an API-mapping table for the decoder if
+you're migrating an existing TJpg_Decoder sketch, and the "Encoder"
+section explaining what is and isn't shared between the two.
+
+## Decoding
+
+```cpp
+#include <TinyJPEGDecoder.h>
+using namespace tinyjpeg;
+
+bool onBlock(TinyJPEGDecoder& decoder, int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bitmap) {
+  tft.pushImage(x, y, w, h, bitmap);  // or however your display draws a block
+  return true;
+}
+
+TinyJPEGDecoder decoder;
+decoder.setCallback(onBlock);
+JRESULT r = decoder.drawJpg(0, 0, jpegData, jpegSize);
+```
+
 - **No Arduino dependency in the decoder itself.** The core reads via a
   generic callback (a memory buffer, any file-like object exposing
   `available()`/`read()`/`position()`/`seek()`, or a plain function
@@ -39,31 +70,70 @@ API-mapping table if you're migrating an existing TJpg_Decoder sketch:
   `getUserData()` pointer this class stores but never interprets, so a
   callback can reach whatever per-decode context it needs (a display
   object, an output buffer) without a global/static variable.
-- **CMake/ESP-IDF support** alongside the Arduino Library Manager, via an
-  `INTERFACE` target - see [Testing](docs/testing.md).
+- **Fixed, small workspace** (`TJPGD_WORKSPACE_SIZE`, ~3.5KB with default
+  settings) regardless of image size or resolution - no heap allocation.
 
 Baseline JPEG only (as TJpg_Decoder itself is) - progressive JPEGs are
 rejected with `JDR_FMT3`, not silently mis-decoded, the same restriction
 ChaN's TJpgDec has always had (more memory would be needed to buffer a
 progressive scan's multiple passes).
 
-## Performance
+See [Decoding](docs/decoding.md) for the full API: in-memory buffers,
+file-like sources (SD/LittleFS/SPIFFS or any conforming `FileT`), custom
+streaming callbacks, and every compile-time configuration option
+(`JD_FORMAT`, `JD_FASTDECODE`, ...).
 
-Measured (not estimated) on a 64x48 test image, x86 desktop (`-O2`, see
-`test/native/bench_native.cpp`):
+## Encoding
 
-| Image | Decode time (avg / min / max) | fps |
-|---|---|---|
-| `gradient_444.jpg` (4:4:4, smooth gradient) | 85.8 / 60.0 / 700.3 us | ~11,655 |
-| `checker_420.jpg` (4:2:0, checkerboard) | 47.6 / 40.7 / 182.6 us | ~20,987 |
+```cpp
+#include <TinyJPEGEncoder.h>
+using namespace tinyjpeg;
 
-Build/run it yourself: `cmake --build build --target bench_native &&
-cd test/native && ../build/test/native/bench_native` (see
-[Testing](docs/testing.md)). Real embedded-hardware numbers (ESP32,
-STM32, ...) are TBD until measured - no fabricated benchmark figures here,
-same rule [TinyH264](https://github.com/pschatzmann/TinyH264) and
-[TinyMPG](https://github.com/pschatzmann/TinyMPG) follow for their own
-performance sections.
+TinyJPEGEncoder encoder;
+encoder.setQuality(85);       // 1-100, default JE_QUALITY
+encoder.setSubsample(true);   // 4:2:0 - smaller files, default JE_SUBSAMPLE
+
+uint8_t jpgBuf[16384];
+size_t jpgSize = 0;
+JERESULT r = encoder.encodeJpg(rgbPixels, width, height, JE_FMT_RGB888, jpgBuf, sizeof(jpgBuf), jpgSize);
+```
+
+- **Full-frame or row-streamed input, always streamed output.**
+  `encodeJpg()` takes one complete pixel buffer up front, for when you
+  already have (or don't mind holding) the whole frame in RAM.
+  `beginEncode()`/`writeRows()`/`finishEncode()` instead take rows
+  incrementally - 1 at a time, the whole image at once, or anything
+  between - for a camera driver or display back buffer that produces rows
+  over time; peak pixel memory is one MCU row band (8 rows, or 16 for
+  4:2:0 color) regardless of image height, not the whole frame. Either
+  way, the *compressed output* is always streamed incrementally
+  (`JE_SZBUF` bytes at a time) to a fixed array, a file-like object
+  (SD/LittleFS/SPIFFS or any conforming `FileT`), or a plain callback -
+  never buffered whole in memory.
+- **RGB565/RGB666 input, no manual conversion.** `JEPixelFormat` covers
+  `JE_FMT_RGB888`, `JE_FMT_RGB565` (2 bytes/pixel, packed 5-6-5 - the
+  actual in-memory format of most TFT/camera frame buffers, not RGB888),
+  `JE_FMT_RGB666` (3 bytes/pixel like RGB888, only the top 6 bits of each
+  byte significant), and `JE_FMT_GRAY8` - pass a TFT back buffer or
+  camera frame straight to `encodeJpg()` in whichever of these it's
+  already in - see [Encoding](docs/encoding.md)'s "Pixel formats" section.
+- **No Arduino dependency, no global singleton, fixed workspace** - the
+  same three properties as the decoder above, for the same reasons; see
+  [Architecture](docs/architecture.md).
+- **Correctness checked by round-trip**, not just self-consistency:
+  `test/native/test_encode_roundtrip.cpp` encodes with `tjpge.h`, decodes
+  the result back with this same repo's own `tjpgd.h`, and diffs against
+  the original source pixels - a pass means the encoder produces a
+  spec-legal bitstream any conformant decoder (not just this one) can
+  read back faithfully.
+
+See [Encoding](docs/encoding.md) for the full API: encoding to a fixed
+array, a file-like sink, or a custom streaming callback, and every
+compile-time configuration option (`JE_QUALITY`, `JE_SUBSAMPLE`, ...).
+
+Measured (not estimated) timings for both directions - desktop x86 and
+real hardware (ESP32-S3, RP2350, RP2040) - are in
+[Performance](docs/performance.md).
 
 ## Part of AudioTools
 
@@ -78,16 +148,25 @@ everything above describes), it needs nothing from AudioTools at all.
 ## Documentation
 
 - [Architecture](docs/architecture.md) - why this project exists, the
-  exact file-by-file mapping from TJpg_Decoder/TJpgDec, and the API
-  changes (no singleton, no SD/SPIFFS-specific methods) with a full
-  before/after table.
+  exact file-by-file mapping from TJpg_Decoder/TJpgDec for the decoder,
+  the API changes (no singleton, no SD/SPIFFS-specific methods) with a
+  full before/after table, and the encoder's own design section (what's
+  shared between encode/decode via `jpeg_common.h`, what isn't and why,
+  and why the encoder takes a full frame instead of streaming MCUs).
 - [Decoding](docs/decoding.md) - `TinyJPEGDecoder` usage: in-memory
   buffers, file-like sources (SD/LittleFS/SPIFFS or any conforming
   `FileT`), custom streaming callbacks, and every compile-time
   configuration option (`JD_FORMAT`, `JD_FASTDECODE`, ...).
+- [Encoding](docs/encoding.md) - `TinyJPEGEncoder` usage: encoding to a
+  fixed array, a file-like sink, or a custom streaming callback, and
+  every compile-time configuration option (`JE_QUALITY`,
+  `JE_SUBSAMPLE`, ...).
 - [Testing](docs/testing.md) - running the native CMake/CTest suite, how
-  the test assets are generated, and why the pixel-comparison tests are
-  tolerance-based rather than byte-exact.
+  the test assets are generated, and why the pixel-comparison tests (for
+  both directions) are tolerance-based rather than byte-exact.
+- [Performance](docs/performance.md) - measured desktop *and* real
+  hardware (ESP32-S3, RP2350, RP2040) timings for both directions, and
+  how to reproduce any of them.
 
 ## Installation
 
@@ -102,16 +181,9 @@ git clone https://github.com/pschatzmann/TinyJPEG.git
 
 No external Arduino library dependencies - the only include beyond the
 C++ standard library is `Arduino.h` itself (transitively, via the Arduino
-build, and only in the examples - the decoder core in `src/` never
-includes it).
+build, and only in the examples - neither the decoder nor the encoder
+core in `src/` includes it). Use `#include <TinyJPEGDecoder.h>`,
+`#include <TinyJPEGEncoder.h>`, or both, independently of one another.
 
 For CMake or ESP-IDF projects instead, see [Testing](docs/testing.md) for
 `add_subdirectory()`/`EXTRA_COMPONENT_DIRS` usage.
-
-## License
-
-Three licenses apply, one per layer of authorship - ChaN's own permissive
-TJpgDec license for `src/tjpgd.h`, and the FreeBSD License for both
-Bodmer's original TJpg_Decoder API design and everything new in this port
-(`src/TinyJPEGDecoder.h`, the build files, tests, examples, and docs) -
-see [LICENSE](LICENSE) for the complete text of each.

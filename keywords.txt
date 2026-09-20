@@ -7,9 +7,13 @@
 #######################################
 
 TinyJPEGDecoder	KEYWORD1
+TinyJPEGEncoder	KEYWORD1
 JDEC	KEYWORD1
 JRESULT	KEYWORD1
 JRECT	KEYWORD1
+JENC	KEYWORD1
+JERESULT	KEYWORD1
+JEPixelFormat	KEYWORD1
 
 #######################################
 # Methods and Functions (KEYWORD2)
@@ -20,6 +24,15 @@ getJpgSize	KEYWORD2
 setJpgScale	KEYWORD2
 setSwapBytes	KEYWORD2
 setCallback	KEYWORD2
+encodeJpg	KEYWORD2
+setQuality	KEYWORD2
+setSubsample	KEYWORD2
+setUserData	KEYWORD2
+getUserData	KEYWORD2
+beginEncode	KEYWORD2
+writeRows	KEYWORD2
+finishEncode	KEYWORD2
+bytesWritten	KEYWORD2
 
 #######################################
 # Constants (LITERAL1)
@@ -34,3 +47,11 @@ JDR_PAR	LITERAL1
 JDR_FMT1	LITERAL1
 JDR_FMT2	LITERAL1
 JDR_FMT3	LITERAL1
+JER_OK	LITERAL1
+JER_INTR	LITERAL1
+JER_PAR	LITERAL1
+JER_MEM1	LITERAL1
+JE_FMT_RGB888	LITERAL1
+JE_FMT_RGB565	LITERAL1
+JE_FMT_RGB666	LITERAL1
+JE_FMT_GRAY8	LITERAL1

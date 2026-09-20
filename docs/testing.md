@@ -120,3 +120,57 @@ files without a manual re-configure):
   that wouldn't have held for TJpg_Decoder's original singleton design
   (see `docs/architecture.md`'s "No more singleton" and "The callback's
   `decoder` parameter and setUserData()" sections).
+- `test_encode_roundtrip` - the main correctness gate for the *encoder*
+  (`tjpge.h`): encode a synthetic gradient (RGB 4:4:4, RGB 4:2:0, and
+  grayscale) with `je_prepare()`/`je_encode()`, decode the result back
+  with this same repo's `tjpgd.h` (via `TinyJPEGDecoder`), and diff
+  against the original source pixels - see `docs/architecture.md`'s
+  "Encoder" section for why this (rather than comparing against an
+  external oracle like the decode tests do) is the right check here: it
+  validates against a decoder already proven correct against libjpeg, so
+  a pass means the encoder produced a spec-legal bitstream a conformant
+  decoder reads back faithfully. Tolerance-based per-mode bounds, measured
+  (not guessed) on the exact synthetic asset generated in the test itself
+  - see that file's own comments for the numbers and what dominates each
+  bound (RGB565 quantization, chroma-subsampling error, independent
+  forward/inverse-DCT rounding).
+- `test_encoder_wrapper` - `TinyJPEGEncoder`'s three output sinks (fixed
+  array, a from-scratch stdio `FILE*`-wrapping `FileT`, and a plain
+  callback) must all produce byte-identical output for the same input;
+  an array sink smaller than the encoded output must fail with
+  `JER_INTR` rather than silently truncating; `setUserData()`/
+  `getUserData()` round-trip. Doesn't re-check bitstream correctness
+  (that's `test_encode_roundtrip`'s job) - just that the wrapper's
+  sink-selection plumbing doesn't alter what `tjpge.h` produces.
+- `test_encode_rgb565` - `JE_FMT_RGB565` input specifically: encodes a
+  synthetic RGB565 (5-6-5 packed) gradient and decodes it back, comparing
+  against the *RGB565-quantized* reference (each channel's 5/6/5 bits
+  expanded back up to 8, the same expansion `tjpge_detail::get_rgb()`
+  itself performs) rather than a full-precision RGB888 source - see that
+  file's own comment for why: RGB565 input is lossy before the encoder
+  ever sees it, and comparing against the already-quantized reference
+  isolates the JPEG-specific error from that unrelated, expected loss.
+- `test_encode_rgb666` - `JE_FMT_RGB666` input specifically: since this
+  format is handled byte-identically to `JE_FMT_RGB888` in `get_rgb()`
+  (no bit expansion needed, unlike RGB565), this test's job is proving
+  `je_prepare()`/`encodeJpg()` actually accept the new enum value (not
+  `JER_PAR`) and derive `ncomp==3` for it correctly, then round-trip
+  against the 6-bit-quantized source buffer itself as the reference.
+- `test_encode_streaming` - the row-band streaming API
+  (`je_start()`/`je_write_rows()`/`je_finish()` in `tjpge.h`): encodes a
+  70x45 image (deliberately not a multiple of 8 or 16 in either
+  dimension, to exercise both the existing right-edge column padding and
+  the new bottom-edge row padding `je_finish()` adds) three ways - one
+  `je_encode()` call, `je_write_rows()` fed 1 row at a time, and fed 7
+  rows at a time (divides neither the 8- nor 16-row band size) - and
+  asserts all three produce byte-identical compressed output, for both
+  subsampling modes. Also round-trips the result through the decoder, and
+  checks the streaming API's call-order/row-count error contract
+  (`JER_PAR` for writing before `je_start()`, double-starting, exceeding
+  `height`, writing after `je_finish()`, finishing early, double-finishing).
+- `test_encoder_wrapper_streaming` - the wrapper-level counterpart:
+  `TinyJPEGEncoder::beginEncode()`/`writeRows()`/`finishEncode()`,
+  checked against `encodeJpg()`'s full-buffer output for byte-identical
+  results on the array and callback sinks, run back-to-back with
+  `encodeJpg()` on the *same* instance to prove the two APIs sharing
+  `workspace_` don't leave stale state behind for each other.

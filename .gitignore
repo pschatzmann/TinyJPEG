@@ -1,3 +1,7 @@
 .*/
 build/
 build*/
+
+# Written by test/native/test_encoder_wrapper.cpp's file-sink test into its
+# WORKING_DIRECTORY (test/native/) each run - a test byproduct, not an asset.
+test/native/test_encoder_wrapper_out.jpg

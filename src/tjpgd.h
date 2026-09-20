@@ -61,6 +61,7 @@
 /----------------------------------------------------------------------------*/
 
 #include "tjpgd_config.h"
+#include "jpeg_common.h"
 #include <cstdint>
 #include <cstddef>
 #include <cstring>
@@ -150,14 +151,10 @@ namespace tjpgd_detail {
 
 /*-----------------------------------------------*/
 /* Zigzag-order to raster-order conversion table */
+/* (shared with the encoder - see jpeg_common.h) */
 /*-----------------------------------------------*/
 
-inline constexpr uint8_t Zig[64] = {	/* Zigzag-order to raster-order conversion table */
-	 0,  1,  8, 16,  9,  2,  3, 10, 17, 24, 32, 25, 18, 11,  4,  5,
-	12, 19, 26, 33, 40, 48, 41, 34, 27, 20, 13,  6,  7, 14, 21, 28,
-	35, 42, 49, 56, 57, 50, 43, 36, 29, 22, 15, 23, 30, 37, 44, 51,
-	58, 59, 52, 45, 38, 31, 39, 46, 53, 60, 61, 54, 47, 55, 62, 63
-};
+using jpeg_common::Zig;
 
 
 
@@ -228,12 +225,7 @@ inline constexpr uint8_t Clip8[1024] = {
 
 #else	/* JD_TBLCLIP */
 
-inline uint8_t BYTECLIP (int val)
-{
-	if (val < 0) return 0;
-	else if (val > 255) return 255;
-	return (uint8_t)val;
-}
+#define BYTECLIP(v) jpeg_common::byteclip(v)
 
 #endif
 

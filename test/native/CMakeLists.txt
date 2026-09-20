@@ -12,6 +12,13 @@ set(TINYJPEG_TESTS
     test_file_source
     test_callback_source
     test_multiple_instances
+    test_encode_roundtrip
+    test_encoder_wrapper
+    test_encode_rgb565
+    test_encode_rgb666
+    test_encode_streaming
+    test_encoder_wrapper_streaming
+    test_forward_dct_fixed
 )
 
 foreach(test_name ${TINYJPEG_TESTS})
